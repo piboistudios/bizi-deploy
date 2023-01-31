@@ -4,6 +4,7 @@
   "description": "Bizi.ly deployments web service",
   "main": "boot.js",
   "scripts": {
+    "artifactregistry-login": "npx google-artifactregistry-auth",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "hostmaster@bizi.ly",
