@@ -21,7 +21,7 @@ module.exports = class AkashCLI {
     constructor(accountName) {
         this.account = {};
         this.account.name = accountName;
-        this.keyRingBackend = 'os';
+        this.keyRingBackend = 'test';
         this.secretMgr = new secrets.SecretManagerServiceClient({
             ...creds,
             
@@ -43,7 +43,7 @@ module.exports = class AkashCLI {
             AKASH_CHAIN_ID: this.chainId.trim(),
             AKASH_NODE: this.node,
             AKASH_KEY_NAME: this.account.name,
-            AKASH_KEYRING_BACKEND: 'os',
+            AKASH_KEYRING_BACKEND: 'test',
             AKASH_ACCOUNT_ADDRESS: this.account.akash.address,
             ...this.additionalEnv
         }
@@ -59,17 +59,17 @@ module.exports = class AkashCLI {
         if (mnemonic) log.debug("with mnemonic...", mnemonic);
         let prefix = '', suffix = '';
         if (mnemonic) {
-            prefix += `echo "${mnemonic}" | `;
+            prefix += `echo "${mnemonic}" & yes | `;
             suffix = ' --recover '
         }
         log.debug("Deleting existing key by name:", this.account.name);
 
         process.env.DO_DELETE && await new Promise((resolve, reject) =>
-            exec('yes | ./akash keys delete ' + this.account.name,
+            exec('yes | ./akash keys delete --keyring-backend test' + this.account.name,
                 (err, stdout, stderr) => resolve({ err, stdout, stderr }))
         );
         return new Promise((resolve, reject) => {
-            exec(prefix + './akash keys add --output json ' + this.account.name + suffix, (err, stdout, stderr) => {
+            exec(prefix + './akash keys add --output json --keyring-backend test ' + this.account.name + suffix, (err, stdout, stderr) => {
                 if (err && !stderr.length) return reject(err);
                 log.debug({stderr});
                 const out = JSON.parse(stderr);
@@ -193,7 +193,7 @@ module.exports = class AkashCLI {
         return uakt / (10 ** 6)
     }
     mkDeployment(filename = "deployment.yaml") {
-        return new Promise((resolve, reject) => exec('yes | ' + this.commandWithEnv(`./akash tx deployment create deployment.yml --from ${this.account.name} --keyring-backend os `), async (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec('yes | ' + this.commandWithEnv(`./akash tx deployment create deployment.yml --from ${this.account.name} --keyring-backend test `), async (err, stdout, stderr) => {
             try {
                 logger.debug({ stdout, stderr });
                 const tx = JSON.parse(stdout);
