@@ -1,10 +1,9 @@
 const dns = require('dns').promises;
 const async = require('async');
-const unbound = require('unb');
 const { mkLogger } = require('./logger');
 const DnsZone = require('./models/dns.zone');
 const logger = mkLogger('dns.verification');
-const authoritativeServers = process.env.AUTHORITATIVE_NAMESERVERS.split(' ') || [
+const authoritativeServers = (process.env.AUTHORITATIVE_NAMESERVERS && process.env.AUTHORITATIVE_NAMESERVERS.split(' ')) || [
     'ns-a1.bizi.ly',
     'ns-a2.bizi.ly'
 ]

@@ -78,7 +78,7 @@ var schema = new mongoose.Schema({
         name: String,
         hostname: String,
         port: Number,
-        attributes: [{ key: String, value: any }]
+        attributes: [{ key: String, value: {} }]
     }],
     ctx: {},
     client:{
