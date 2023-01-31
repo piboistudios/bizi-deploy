@@ -2,8 +2,8 @@ const { mkLogger } = require('./logger');
 const Service = require('./service');
 const logger = mkLogger('bizi-deploy');
 const { createJSONRPCErrorResponse } = require('json-rpc-2.0')
-
-
+const Client = require('./models/client');
+const AcmeChallenge = require('./models/acme.challenge');
 module.exports = async (cnx) => {
     const AcmeChallenge = require('./models/acme.challenge');
     const svc = new Service({
