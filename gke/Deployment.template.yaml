@@ -30,13 +30,15 @@ spec:
               protocol: TCP
               containerPort: 8081
           volumeMounts:
-            - mountPath: /app/ssl
-              name: temp-ssl
+          - name: secret-manager-sa
+            mountPath: /secrets/
+            readOnly: true
           env:
           {{#forEach environmentVariables}}
             - name: {{ key }}
               value: "{{ value }}" # substitutes with _ENV_VAR from cloudbuild.yaml
           {{/forEach}}
       volumes:
-        - name: temp-ssl
-          emptyDir: {}
+      - name: secret-manager-sa
+        secret:
+          secretName: secret-manager-sa
