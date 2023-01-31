@@ -10,7 +10,7 @@ module.exports = async (cnx) => {
             accountName: process.env.AKASH_ACCOUNT_NAME
         }
     });
-    await svc.init();
+    // await svc.init();
 
     const express = require('express');
     const bodyParser = require('body-parser');
