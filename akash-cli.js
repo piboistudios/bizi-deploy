@@ -63,7 +63,8 @@ module.exports = class AkashCLI {
             suffix = ' --recover '
         }
         log.debug("Deleting existing key by name:", this.account.name);
-        await new Promise((resolve, reject) =>
+
+        process.env.DO_DELETE && await new Promise((resolve, reject) =>
             exec('yes | ./akash keys delete ' + this.account.name,
                 (err, stdout, stderr) => resolve({ err, stdout, stderr }))
         );
