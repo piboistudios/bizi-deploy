@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ packageJson.name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ packageJson.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ packageJson.name }}
+    spec:
+      hostname: {{packageJson.name}}
+      # initContainers:
+      #   - name: gen-keypair
+      #     image: "paulczar/omgwtfssl:latest"
+      #     env:
+      #       - name: SSL_SUBJECT
+      #         value: "{{ domain }}"
+      #     volumeMounts:
+      #       - mountPath: /certs
+      #         name: temp-ssl
+      containers:
+        - name: {{ packageJson.name }}
+          image: us-central1-docker.pkg.dev/{{ projectId }}/bizi-docker-images/{{ packageJson.name}}:{{tag}}
+          ports:
+            - name: http
+              protocol: TCP
+              containerPort: 8081
+          volumeMounts:
+            - mountPath: /app/ssl
+              name: temp-ssl
+          env:
+          {{#forEach environmentVariables}}
+            - name: {{ key }}
+              value: "{{ value }}" # substitutes with _ENV_VAR from cloudbuild.yaml
+          {{/forEach}}
+      volumes:
+        - name: temp-ssl
+          emptyDir: {}
