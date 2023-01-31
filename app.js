@@ -86,6 +86,9 @@ module.exports = async (cnx) => {
         server.close(err => {
             if (err) logger.fatal("Failed to shut down server gracefully:", err);
             process.exit(err ? 1 : 0);
-        })
+        });
+        setTimeout(() => {
+            process.exit(1);
+        }, 1000);
     });
 }
