@@ -65,6 +65,7 @@ module.exports = class AkashCLI {
         return new Promise((resolve, reject) => {
             exec(prefix + './akash keys add --output json ' + this.account.name + suffix, (err, stdout, stderr) => {
                 if (err && !stderr.length) return reject(err);
+                log.debug({stderr});
                 const out = JSON.parse(stderr);
                 log.debug({ out });
                 // log.debug({ stdout, stderr, err });
