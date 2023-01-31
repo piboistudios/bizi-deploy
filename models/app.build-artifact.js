@@ -3,7 +3,7 @@ var mongoose = require('mongoose')
     , ObjectId = mongoose.Schema.Types.ObjectId;
 
 var schema = new mongoose.Schema({
-    app: String,
+    name: String,
     artifact:{
         cid:String,
         meta:{}

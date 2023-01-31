@@ -579,11 +579,11 @@ module.exports = class Service {
     async buildArtifactPush({
         client,
         clientDoc,
-        app,
+        name,
         artifact
     }) {
         const artifactDoc = new BuildArtifact({
-            app,
+            name,
             artifact
         });
         await artifactDoc.save();
