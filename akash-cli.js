@@ -16,6 +16,11 @@ module.exports = class AkashCLI {
         this.account.name = accountName;
         this.keyRingBackend = 'os';
         this.secretMgr = new secrets.SecretManagerServiceClient();
+        (async () => {
+
+            logger.debug("Secret manager svc client:", (await this.secretMgr.auth.getClient()).email)
+        })()
+
 
     }
     get node() {
