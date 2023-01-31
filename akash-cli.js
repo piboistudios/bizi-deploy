@@ -12,11 +12,6 @@ const logger = mkLogger('akash-cli');
 const { exec } = require('child_process');
 const fs = require('fs');
 let creds = {};
-if(!process.env.USE_GAD_CREDENTIALS) {
-    creds = {
-        keyFile: '/secrets/service_account.json'
-    }
-}
 module.exports = class AkashCLI {
     constructor(accountName) {
         this.account = {};

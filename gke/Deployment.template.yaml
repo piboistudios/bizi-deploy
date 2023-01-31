@@ -38,6 +38,8 @@ spec:
             - name: {{ key }}
               value: "{{ value }}" # substitutes with _ENV_VAR from cloudbuild.yaml
           {{/forEach}}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /secrets/service_account.json
       volumes:
       - name: secret-manager-sa
         secret:
