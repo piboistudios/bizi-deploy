@@ -9,7 +9,12 @@ const client = axios.create({
 });
 const { mkLogger } = require('./logger')
 const logger = mkLogger('akash-cli');
-const { exec } = require('child_process');
+const { exec: doExec } = require('child_process');
+function exec() {
+
+    logger.trace("EXEC:", ...[...arguments].slice(0,-1));
+    doExec(...arguments);
+}
 const fs = require('fs');
 let creds = {};
 module.exports = class AkashCLI {
