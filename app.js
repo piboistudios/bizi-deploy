@@ -1,6 +1,7 @@
 const { mkLogger } = require('./logger');
 const Service = require('./service');
 const logger = mkLogger('bizi-deploy');
+const { createJSONRPCErrorResponse } = require('json-rpc-2.0')
 
 
 module.exports = async (cnx) => {
