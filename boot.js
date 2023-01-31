@@ -13,8 +13,8 @@ const options = { ssl: Boolean(process.env.DB_SSL), sslValidate: Boolean(process
 logger.info("Mongo options:", options);
 mongoose.connect(dsn, options)
     .then(async cnx => {
-        logger.sub('mongoose')
-            .debug("Mongoose connection:", cnx);
+        // logger.sub('mongoose')
+            // .debug("Mongoose connection:");
         logger.info("Connected to database");
         if (!process.env.NO_START) {
 
