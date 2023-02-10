@@ -92,3 +92,5 @@ module.exports = async (cnx) => {
     //     }, 1000);
     // });
 }
+
+// kubectl delete pod microservice-user-75c4b7c97c-xhlts --grace-period=0 --force

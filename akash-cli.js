@@ -171,7 +171,7 @@ module.exports = class AkashCLI {
         await this.refreshPriceData();
         log.debug("All set");
         global.cli = this;
-        if(!process.env.DONT_GEN_CERT) {
+        if (!process.env.DONT_GEN_CERT) {
             await this.genCert()
         }
     }
@@ -197,11 +197,13 @@ module.exports = class AkashCLI {
         return uakt / (10 ** 6)
     }
     async genCert() {
-        await new Promise((resolve, reject) => exec('yes | ' + this.commandWithEnv('./akash tx cert generate client --from ' + this.account.name), async (err, stdout, stderr) => {
-
+        await new Promise((resolve, reject) => exec('yes | ' + this.commandWithEnv('./akash tx cert generate client --overwrite --from ' + this.account.name), async (err, stdout, stderr) => {
+            if (err) return reject(err);
+            resolve({ stdout, stderr });
         }));
         await new Promise((resolve, reject) => exec('yes | ' + this.commandWithEnv('./akash tx cert publish client --from ' + this.account.name), async (err, stdout, stderr) => {
-
+            if (err) return reject(err);
+            resolve({ stdout, stderr });
         }));
     }
     mkDeployment(filename = "deployment.yaml") {
