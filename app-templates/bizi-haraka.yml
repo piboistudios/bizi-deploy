@@ -1,0 +1,64 @@
+---
+kind: BackEnd
+stack:
+  version: "2.0"
+  services:
+   bizi-haraka:
+    image: "us-central1-docker.pkg.dev/bizi-ly/bizi-docker-images/bizi-haraka:03bdedf"
+    expose:
+      - port: 25
+        as: 25
+        proto: tcp
+        to:
+          - global: true
+    command:
+      - node
+      - configure
+    args:
+      - --in=config-templates
+      - --out=config
+      - --db-user={{internal.db.user}}
+      - --db-pass={{internal.db.pass}}
+      - --db-host=mongo
+      - --db-port=27017
+      - --db-auth-source=admin
+      - --db-collection={{internal.db.collection}}
+      - --ldap-main-server=ldap://bizi-ldap:389
+      - --ldap-base-dn='ou=users,dc={{internal.apps.biziLdap.hostname.siteName}},dc={{internal.apps.biziLdap.hostname.tld}}'
+      - --ldap-bind-user='uid={{internal.ldap.user}},ou=users,dc={{internal.apps.biziLdap.hostname.siteName}},dc={{internal.apps.biziLdap.hostname.tld}}'
+      - --ldap-bind-pass={{internal.apps.ldap.pass}}
+      {{#each emailDomains}}
+      - --domain='{"name":"{{this.domain}}","ldap":{"server":"ldap://bizi-ldap:389","binddn":"uid=admin,ou=users,dc={{internal.apps.biziLdap.hostname.siteName}},dc={{internal.apps.biziLdap.hostname.tld}}","bindpw":"{{internal.ldap.pass}}","basedn":"ou=users,dc={{internal.apps.biziLdap.hostname.siteName}},dc={{internal.apps.biziLdap.hostname.tld}}"}}'
+      {{/each}}
+      - --start=1
+    env:
+      - DEBUG=*
+    
+  profiles:
+    compute:
+      bizi-haraka:
+        resources:
+          cpu:
+            units: 0.5
+          memory:
+            size: 4Gi
+          storage:
+            - size: 512Mi
+    placement:
+      central:
+        pricing:
+          bizi-haraka:
+            denom: uakt
+            amount: 1000
+        signedBy:
+          anyOf:
+            - akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63
+            - akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
+        attributes:
+          host: akash
+
+  deployment:
+    bizi-haraka:
+      central:
+        profile: bizi-haraka
+        count: 1

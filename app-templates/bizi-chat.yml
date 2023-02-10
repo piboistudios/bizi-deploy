@@ -1,0 +1,63 @@
+---
+kind: BackEnd
+stack:
+  version: "2.0"
+  services:
+   bizi-chat:
+    image: "us-central1-docker.pkg.dev/bizi-ly/bizi-docker-images/bizi-chat:c77f7ce"
+    expose:
+      - port: 8080
+        as: 8080
+        proto: tcp
+        to:
+          - global: true
+    env:
+      - DEBUG=*
+      - HOSTNAME={{internal.apps.biziChat.hostname.domain}}
+      - DB_USER={{internal.db.user}}
+      - DB_PASS={{internal.db.pass}}
+      - DB_ADDR=mongo
+      - DB_AUTH_SOURCE=admin
+      - DB_PORT=27017
+      - DB_NAME={{internal.db.collection}}
+      - PORT=8080
+      - SHOW_OAUTH_STACK=1
+      - "THIS_URI=https://{{internal.apps.biziChat.hostname.domain}}"
+      - OAUTH_CLIENT_ID={{internal.bizi.client.key}}
+      - OAUTH_CLIENT_SECRET={{internal.bizi.client.secret}}
+      - "OAUTH_AUTHORIZE_URI=https://oauth.bizi.ly/auth"
+      - "OAUTH_TOKEN_URI=https://oauth.bizi.ly/token"
+      - "OAUTH_JWKS_URI=https://oauth.bizi.ly/.well-known/jwks"
+      - "OAUTH_ISSUER=ly:bizi:oauth2"
+      - "SERVICE_NAME={{internal.apps.biziChat.hostname.tld}}:{{internal.apps.biziChat.hostname.siteName}}"
+      - "KIWIIRC_DIST=https://storage.googleapis.com/bizi-static/kiwiirc"
+      - PLUGINS_URL=https://storage.googleapis.com/bizi-static/bizi-kiwiirc-plugins
+
+  profiles:
+    compute:
+      bizi-chat:
+        resources:
+          cpu:
+            units: 0.5
+          memory:
+            size: 512Mi
+          storage:
+            - size: 512Mi
+    placement:
+      central:
+        pricing:
+          bizi-chat:
+            denom: uakt
+            amount: 1000
+        signedBy:
+          anyOf:
+            - akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63
+            - akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
+        attributes:
+          host: akash
+
+  deployment:
+    bizi-chat:
+      central:
+        profile: bizi-chat
+        count: 1

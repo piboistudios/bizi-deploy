@@ -1,0 +1,65 @@
+---
+kind: BackEnd
+stack:
+  version: "2.0"
+  services:
+   bizi-ldap:
+    image: "us-central1-docker.pkg.dev/bizi-ly/bizi-docker-images/bizi-ldap:785be76"
+    expose:
+      - port: 636
+        as: 636
+        proto: tcp
+        to:
+          - global: true
+      - port: 389
+        as: 389
+        proto: tcp
+        to:
+          - global: false
+          - service: bizi-haraka
+          - service: bizi-haraka
+          - service: bizi-ssh
+    env:
+      - DEBUG=*
+      - HOSTNAME={{internal.apps.biziLdap.hostname.domain}}
+      - DB_USER={{internal.db.user}}
+      - DB_PASS={{internal.db.pass}}
+      - DB_ADDR=mongo
+      - DB_AUTH_SOURCE=admin
+      - DB_PORT=27017
+      - DB_NAME={{internal.db.collection}}
+      - PORT=389
+      - TLS_PORT=636
+      - "SSH_KEY_URL={{apps.ldap.sshKeyUrl}}"
+      - BASEDN=dc={{internal.apps.biziLdap.hostname.siteName}},dc={{internal.apps.biziLdap.hostname.tld}}
+      - ADMIN_PASS={{apps.ldap.pass}}
+      - ORGANIZATION={{apps.ldap.org}}
+    
+  profiles:
+    compute:
+      bizi-ldap:
+        resources:
+          cpu:
+            units: 0.5
+          memory:
+            size: 512Mi
+          storage:
+            - size: 512Mi
+    placement:
+      central:
+        pricing:
+          bizi-ldap:
+            denom: uakt
+            amount: 1000
+        signedBy:
+          anyOf:
+            - akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63
+            - akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
+        attributes:
+          host: akash
+
+  deployment:
+    bizi-ldap:
+      central:
+        profile: bizi-ldap
+        count: 1

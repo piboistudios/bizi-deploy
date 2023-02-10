@@ -25,20 +25,19 @@ async function main() {
         const graphClient = axios.create({
             headers: {
                 "x-api-key": process.env.BIZI_API_KEY,
-                "content-type": "application/vnd.api+json"
             },
             baseURL: process.env.GRAPH_URI,
             validateStatus: () => true,
             httpsAgent
         });
         const bootstrapZoneResponse = await gateClient.post('/rpc', {
-            id: "foo",
-            jsonrpc: "2.0",
-            method: "dns.zone.bootstrap",
-            params: {
-                name: argv.name || argv.upstreamHost.replace(/\./gi, '-'),
-                domain: argv.upstreamHost,
-                client: argv.client
+            "id": "foo",
+            "jsonrpc": "2.0",
+            "method": "dns.zone.bootstrap",
+            "params": {
+                "name": argv.name || argv.upstreamHost.replace(/\./gi, '-'),
+                "domain": argv.upstreamHost,
+                "client": argv.client
             }
         });
         responses.push({ bootstrapZoneResponse })

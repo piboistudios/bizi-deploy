@@ -65,7 +65,7 @@ module.exports = class AkashCLI {
         log.debug("Deleting existing key by name:", this.account.name);
 
         process.env.DO_DELETE && await new Promise((resolve, reject) =>
-            exec(`yes | ./akash keys delete --keyring-backend ${this.keyRingBackend}` + this.account.name,
+            exec(`yes | ./akash keys delete --keyring-backend ${this.keyRingBackend} ` + this.account.name,
                 (err, stdout, stderr) => resolve({ err, stdout, stderr }))
         );
         return new Promise((resolve, reject) => {
@@ -192,17 +192,31 @@ module.exports = class AkashCLI {
     uakt2Akt(uakt) {
         return uakt / (10 ** 6)
     }
+    async genCert() {
+        await new Promise((resolve, reject) => exec('yes | ' + this.commandWithEnv('./akash tx cert generate client --from ' + this.account.name), async (err, stdout, stderr) => {
+
+        }));
+        await new Promise((resolve, reject) => exec('yes | ' + this.commandWithEnv('./akash tx cert publish client --from ' + this.account.name), async (err, stdout, stderr) => {
+
+        }));
+    }
     mkDeployment(filename = "deployment.yaml") {
-        return new Promise((resolve, reject) => exec('yes | ' + this.commandWithEnv(`./akash tx deployment create deployment.yml --from ${this.account.name} --keyring-backend ${this.keyRingBackend} `), async (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec('yes | ' + this.commandWithEnv(`./akash tx deployment create ${filename} --from ${this.account.name} --keyring-backend ${this.keyRingBackend} `), async (err, stdout, stderr) => {
             try {
                 logger.debug({ stdout, stderr });
                 const tx = JSON.parse(stdout);
                 const deployment = JSON.parse(stderr);
                 const record = new AkashDeployment(deployment);
                 await record.save();
-                resolve({ blockchain: { tx }, deployment, record });
+                resolve({ blockchain: { tx }, deployment, record, filename });
             } catch (e) {
-                reject('ERROR:' + e + '\n' + err + '\n\nSTDERR:\n' + stderr);
+                if (e.toString().indexOf('could not open certificate PEM file') !== -1) {
+                    await this.genCert();
+                    return this.mkDeployment(filename);
+                }
+                else {
+                    reject('ERROR:' + e + '\n' + err + '\n\nSTDERR:\n' + stderr);
+                }
             }
         }))
     }
@@ -237,8 +251,8 @@ module.exports = class AkashCLI {
             resolve(JSON.parse(stdout));
         }))
     }
-    sendManifest({ provider, dseq }) {
-        return new Promise((resolve, reject) => exec(`yes | ./akash send-manifest deployment.yml  --node ${this.node} --output json --dseq ${dseq} --provider ${provider} --from ${this.account.name}`, async (err, stdout, stderr) => {
+    sendManifest({ provider, dseq, filename }) {
+        return new Promise((resolve, reject) => exec(`yes | ./akash send-manifest ${filename}  --node ${this.node} --output json --dseq ${dseq} --provider ${provider} --from ${this.account.name}`, async (err, stdout, stderr) => {
             if (err) return reject(err + '\nSTDERR:\n' + stderr);
             logger.debug({ stdout });
             resolve(JSON.parse(stdout));
@@ -253,6 +267,7 @@ module.exports = class AkashCLI {
     }
     deploymentStatus({ dseq, provider }) {
         return new Promise((resolve, reject) => exec(`./akash lease-status --from ${this.account.name} --provider ${provider} --node ${this.node} --dseq ${dseq}`, async (err, stdout, stderr) => {
+            logger.sub('deployment-status-😒').debug({ err, stdout, stderr });
             if (err) return reject(err + '\nSTDERR:\n' + stderr);
             logger.debug({ stdout });
             resolve(JSON.parse(stdout));
@@ -260,7 +275,9 @@ module.exports = class AkashCLI {
     }
     async selectBid({ bids, deployment }) {
         const selected = this._selectBid(bids);
+
         deployment.bid = selected;
+        selected.bid.bid_id.filename = deployment.filename;
         const providerInfo = await this.getProviderInfo(selected.bid.bid_id);
 
         if (deployment.record) {

@@ -1,8 +1,18 @@
 'use strict';
 var mongoose = require('mongoose')
     , ObjectId = mongoose.Schema.Types.ObjectId;
-
-var schema =new mongoose.Schema({
+/**
+ * @typedef {{
+ *     client: mongoose.Types.ObjectId;
+ *     name: string;
+ *     dnsName: string;
+ *     verified?: Date | undefined;
+ * }} DnsZoneSchema
+ */
+/**
+ * @typedef {import('mongoose').Document<{}, {}, DnsZoneSchema> & DnsZoneSchema} DnsZone
+ */
+var schema = new mongoose.Schema({
     verified: Date,
     client: { required: true, ref: "Client", type: ObjectId },
     name: { required: true, type: String },

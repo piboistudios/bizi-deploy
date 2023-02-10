@@ -1,0 +1,52 @@
+---
+kind: BackEnd
+stack:
+  version: "2.0"
+  services:
+   bizi-imap:
+    image: "us-central1-docker.pkg.dev/bizi-ly/bizi-docker-images/bizi-imap:855e74f"
+    expose:
+      - port: 993
+        as: 993
+        proto: tcp
+        to:
+          - global: true
+    env:
+      - DEBUG=*
+      - HOSTNAME={{internal.apps.biziImap.hostname.domain}}
+      - DB_USER={{internal.db.user}}
+      - DB_PASS={{internal.db.pass}}
+      - DB_ADDR=mongo
+      - DB_AUTH_SOURCE=admin
+      - DB_PORT=27017
+      - DB_NAME={{internal.db.collection}}
+      - PORT=993
+    
+  profiles:
+    compute:
+      bizi-imap:
+        resources:
+          cpu:
+            units: 0.5
+          memory:
+            size: 512Mi
+          storage:
+            - size: 512Mi
+    placement:
+      central:
+        pricing:
+          bizi-imap:
+            denom: uakt
+            amount: 1000
+        signedBy:
+          anyOf:
+            - akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63
+            - akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
+        attributes:
+          host: akash
+
+  deployment:
+    bizi-imap:
+      central:
+        profile: bizi-imap
+        count: 1

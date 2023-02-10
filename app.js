@@ -54,8 +54,8 @@ module.exports = async (cnx) => {
     // rpc.guard = guard;
     router.post("/rpc", guard, async (req, res, next) => {
         const jsonRPCRequest = req.body;
-        jsonRPCRequest.client = req.client.id;
-        jsonRPCRequest.clientDoc = req.client;
+        jsonRPCRequest.params.client = req.client.id;
+        jsonRPCRequest.params.clientDoc = req.client;
         // server.receive takes a JSON-RPC request and returns a promise of a JSON-RPC response.
         // It can also receive an array of requests, in which case it may return an array of responses.
         // Alternatively, you can use server.receiveJSON, which takes JSON string as is (in this case req.body).

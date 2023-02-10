@@ -1,0 +1,59 @@
+---
+kind: BackEnd
+stack:
+  version: "2.0"
+  services:
+   bizi-irc:
+    image: "us-central1-docker.pkg.dev/bizi-ly/bizi-docker-images/bizi-irc:11dd7ae"
+    expose:
+      - port: 6697
+        as: 6697
+        proto: tcp
+        to:
+          - global: true
+      - port: 6698
+        as: 6698
+        proto: tcp
+        to:
+          - global: true
+    env:
+      - DEBUG=*
+      - HOSTNAME={{internal.apps.biziLdap.hostname.domain}}
+      - DB_USER={{internal.db.user}}
+      - DB_PASS={{internal.db.pass}}
+      - DB_ADDR=mongo
+      - DB_AUTH_SOURCE=admin
+      - DB_PORT=27017
+      - DB_NAME={{internal.db.collection}}
+      - PORT=6697
+      - WEB_PORT=6698
+      - "JWKS_URI=https://oauth.bizi.ly/.well-known/jwks"
+    
+  profiles:
+    compute:
+      bizi-irc:
+        resources:
+          cpu:
+            units: 0.5
+          memory:
+            size: 512Mi
+          storage:
+            - size: 512Mi
+    placement:
+      central:
+        pricing:
+          bizi-irc:
+            denom: uakt
+            amount: 1000
+        signedBy:
+          anyOf:
+            - akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63
+            - akash18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4
+        attributes:
+          host: akash
+
+  deployment:
+    bizi-irc:
+      central:
+        profile: bizi-irc
+        count: 1

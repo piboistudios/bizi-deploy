@@ -1,8 +1,8 @@
-const { parse: parseDomain } = require('tldts');
 const fs = require('fs');
-const path = require('path');
+const parseDomain = require('parse-domains');
 const DnsVerifier = require('./dns.verification');
-const os = require('os');
+const Client = require('./models/client');
+let camelcase;
 const YAML = require('yaml');
 const async = require('async');
 const handlebars = require('handlebars');
@@ -17,9 +17,7 @@ const RESOURCE_TYPES = {
 }
 const { mkLogger } = require('./logger');
 const logger = mkLogger('bizi-deploy:service');
-const log = logger.debug;
-const logError = logger.error;
-const Client = require('./models/client');
+// const log = logger.debug;
 const VirtualHost = require('./models/gate.virtual-host');
 const DnsZone = require('./models/dns.zone');
 const DnsRecordset = require('./models/dns.recordset');
@@ -37,12 +35,11 @@ const axios = axiosStat.create({
     },
     paramsSerializer: (params) => qs.stringify(params, { encode: false }),
 })
-const { JSONRPCServer, createJSONRPCErrorResponse } = require('json-rpc-2.0');
-const { randomUUID } = require('crypto');
+const { JSONRPCServer } = require('json-rpc-2.0');
 const AkashCLI = require('./akash-cli');
-const AkashDeployment = require('./models/akash.deployment');
 const GateRegistration = require('./models/gate.registration');
 const BuildArtifact = require('./models/app.build-artifact');
+const DeploymentEngine = require('./deployment/engine.v2');
 
 module.exports = class Service {
     constructor({
@@ -52,8 +49,8 @@ module.exports = class Service {
     }) {
         this.verifier = new DnsVerifier();
         const svcMethods = {
-            "deployment": this.deployment.bind(this),
-            "deployment.status.update": this.deploymentStatusUpdate.bind(this),
+            "deploy": this.deployment.bind(this),
+            // "deployment.status.update": this.deploymentStatusUpdate.bind(this),
             "gate.registration.complete": this.gateRegistrationComplete.bind(this),
             "vhost.get-certs": this.vhostGetCert.bind(this),
             "dns.zone.bootstrap": this.dnsZoneBootstrap.bind(this),
@@ -64,9 +61,14 @@ module.exports = class Service {
             this.rpc.addMethod(method, fn);
         });
         this.akash = new AkashCLI(accountName);
+        this.engine = new DeploymentEngine(this.akash, this);
     }
     async init() {
-        this.akash.init();
+        camelcase = (await import('camelcase')).default;
+        return Promise.all([
+            this.akash.init(),
+            this.engine.init()
+        ]);
     }
     isCustom(app) {
         return false;
@@ -77,7 +79,7 @@ module.exports = class Service {
      *  apps: {
      *      name:String,
      *      hostname:String,
-     *      port:Number,
+     *      ports:(Number|String)[],
      *      attributes:{key:String,value:any}[]
      *  }[],
      * client:String,
@@ -87,212 +89,100 @@ module.exports = class Service {
     async deployment({
         apps,
         client,
+        clientDoc,
         ctx
     }) {
-        const deployment = {
-            version: "2.0",
-            services: [],
-            profiles: [],
-            deployment: []
-        };
-        const ctxRegexMap = Object.entries(ctx).reduce((obj, [key, value]) => {
-            obj[key] = {
-                regex: new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`),
-                strictRegex: new RegExp(`^\\{\\{\\{\\s*${key}\\s*\\}\\}\\}$`),
-                value
+        let log = logger.sub('deployment');
+        log.info("Begin...", client, clientDoc);
+        /** @type {*} */
+        const biziDeployment = this.engine.create("test");
+        await Promise.all(apps.map(async app => {
+            app.hostnameParsed = await parseDomain(app.hostname);
+        }));
+        biziDeployment.client = client;
+        ctx.internal = {};
+        ctx.internal.appList = apps;
+        ctx.internal.apps = apps.reduce((result, app) => {
+            result[camelcase(app.name)] = {
+                ...app,
+                hostname: app.hostnameParsed,
             }
-            return obj;
+            return result;
         }, {});
-        const ymlCtx = Object.entries(ctx).reduce((obj, [key, value]) => {
-            obj[key] = YAML.stringify(value);
-            return obj;
-        }, {})
-        apps.forEach(app => {
+        ctx.internal.db = {
+            user: 'root',
+            pass: 'test'
+        }
+        ctx.internal.bizi = {
+            ...clientDoc.toJSON()
+        }
+        log.debug("ctx:", ctx);
+        function yamlify(obj) {
+            return Object.entries(obj).reduce((obj, [key, value]) => {
+                obj[key] = value instanceof Object ? yamlify(value) : value;
+                return obj;
+            }, {});
+        }
+        const ymlCtx = yamlify(ctx);
+        log.debug('yaml ctx:', ymlCtx);
+        const boilerplate = [
+            {
+                name: 'core',
+            }
+        ]
+        await biziDeployment.save();
+        await Promise.all([...boilerplate, ...apps].map(async app => {
+            let deployLog = log.sub(app.name);
+            deployLog.info("Begin...");
+            deployLog.debug("app:", app);
             if (this.isCustom(app)) {
                 throw new Error('Custom cloud apps not implemented');
             } else {
                 const templatePath = `app-templates/${app.name}.yml`;
+                deployLog.debug("template path:", templatePath);
                 if (!fs.existsSync(templatePath)) throw new Error("App template does not exist: " + app.name);
                 const templateYaml = '' + fs.readFileSync(templatePath);
+                deployLog.debug("template yaml:", templateYaml);
                 const template = handlebars.compile(templateYaml);
-                const templateObj = YAML.parse(template(templateYaml, {
+                const compiled = template({
+                    apps,
                     ...ctx,
                     yml: ymlCtx
+                });
+                deployLog.debug("compiled yaml:", compiled);
+                const templateObjs = YAML.parseAllDocuments(compiled).map(d => d.toJS());
+                deployLog.debug("deployable data objects:", templateObjs);
+                await Promise.all(templateObjs.map(async deployable => {
+
+                    const biziDeployable = biziDeployment.create(deployable);
+                    biziDeployable.app = app;
+                    biziDeployable.name = app.name;
+                    deployLog.info("Saving deployable...");
+                    biziDeployment.deployables.push(biziDeployable);
+                    await biziDeployable.save();
+
                 }));
-                function substitute(value, obj, key) {
-                    if (value instanceof String) {
-                        for (let [ctxKey, ctx] of Object.entries(ctxRegexMap)) {
-                            if (ctx.strictRegex.test(value)) {
-                                obj[key] = ctx.value;
-                                break;
-                            }
-                            else if (ctx.regex.test(value)) {
-                                obj[key] = value.replace(ctx.regex, ctx.value)
-                                break;
-                            }
-                        }
-                    } else if (value instanceof Object) {
-                        Object.entries(value).forEach((key, member) => {
-                            substitute(member, value, key);
-                        });
-                    } else if (value instanceof Array) {
-                        value.forEach(o => substitute(o));
-                    }
-
-                }
-                if (templateObj.type === 'front-end') {
-                    /**
-                     * @todo 
-                     *  - find content ref by app
-                     *  - upsert DNSLink record pointing to CID of ref
-                     *  - Upsert A record pointing to CloudFlare IPFS Gateway
-                     *  */
-                } else if (templateObj.type === 'back-end') {
-
-                    // substitute(templateObj);
-                    Object.entries(templateObj).forEach((section, value) => {
-                        if (!(value instanceof Array)) return;
-                        if (!(deployment[section] instanceof Array)) return;
-
-                        deployment[section].push(...value);
-                    });
-                }
-                delete templateObj.type;
             }
-        });
-
-        const deploymentYaml = YAML.stringify(deployment);
-        // const template = handlebars.compile(deploymentTemplateYaml);
-        const uuid = randomUUID();
-        const tmpPath = path.join(os.tmpdir(), `deployment-${uuid}.yml`);
-        fs.writeFileSync(tmpPath, deploymentYaml);
-        /**start deployment */
-
-        let akashDeployment
-        async.retry(10, async.asyncify(async () => {
-
-            akashDeployment = await this.akash.mkDeployment(tmpPath);
         }));
-        let bids
-        do {
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-            bids = await this.akash.getBids(akashDeployment);
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-        } while (!bids.bids.length);
+        await biziDeployment.save();
+        {
+            this.engine.apply(biziDeployment)
+                .then(r => {
+                    log.debug("Deployment result:", r);
+                    global.deploymentResult = r;
+                })
+                .catch(e => {
+                    log.fatal("Deployment error:", e);
+                })
 
-        let leaseResult
-        async.retry(10, async.asyncify(async () => {
-            leaseResult = await this.akash.selectBid(bids);
-        }));
-        akashDeployment.record.lease = leaseResult;
-        akashDeployment.record.apps = apps;
-        akashDeployment.record.ctx = ctx;
-        akashDeployment.record.client = client;
-        await akashDeployment.record.save();
-
+        }
         return {
-            id: akashDeployment.id
+            id: biziDeployment.id
         }
 
     }
 
-    async deploymentStatusUpdate({
-        deploymentId,
-        client,
-    }) {
-        const deployment = await AkashDeployment.findOne({
-            client, id: deploymentId
-        });
 
-        if (!deployment) throw new Error('Not found.');
-        const status = await this.akash.deploymentStatus(deployment.bid.bid_id);
-        if (!status.forwarded_ports) throw new Error('Try again later.');
-        const results = await Promise.all(Object.entries(status.forwarded_ports).flatMap(([appId, downstreams]) => {
-            const app = deployment.apps.find(app => app.name === appId);
-            return downstreams.map(async downstream => {
-                let bootstrapResult, zoneId, zone;
-                const { subdomain: appStub, domain: appZone } = parseDomain(app.hostname)
-                try {
-                    bootstrapResult = await this.dnsZoneBootstrap({
-                        name: app.name + '.' + appZone,
-                        domain: app.hostname,
-                        client
-                    })
-                    zoneId = bootstrapResult.ids.zone;
-                    zone = await DnsZone.findById(zoneId);
-                } catch (e) {
-                    const existingZone = zone = await DnsZone.findOne({
-
-                        name: app.name + '.' + appZone,
-                        client
-
-                    });
-                    zoneId = existingZone.id;
-                }
-                const vhost = await VirtualHost.findOneAndUpdate({
-                    zone: zoneId,
-                    stub: appStub
-                }, {
-
-                }, {
-                    new: true,
-                    upsert: true
-                });
-                await vhost.save();
-                if (downstream.port === 22) {
-                    const record = await DnsRecordset.findOneAndUpdate({
-                        zone: zoneId,
-                        resourceType: 'CNAME',
-                    }, {
-                        $set: {
-                            records: [
-                                {
-                                    value: downstream.host,
-                                    weight: 1
-                                }
-                            ]
-                        }
-                    }, {
-                        new: true,
-                        upsert: true
-                    });
-                    await record.save();
-                } else {
-                    const registration = await GateRegistration.findOneAndUpdate({
-                        'dest.host': downstream.host,
-                        'dest.port': downstream.externalPort,
-                        'src.host': vhost.id,
-                        'src.port': substitutePort(downstream.port),
-                        client
-                    }, {
-
-                    }, {
-                        new: true,
-                        upsert: true
-                    });
-                    await registration.save();
-                    await this.gateRegistrationComplete({
-                        gateRegistration: registration.id
-                    });
-                }
-                /**
-                 * @todo find or create virtual host
-                 *  - if port 22:
-                 *       create CNAME pointing to host
-                 *   
-                 *  - else upsert port registration:
-                 *     dest:
-                 *         host: downstream.host
-                 *         port: downstream.externalPort
-                 *     src:
-                 *         host: app.hostname
-                 *         port: replacePort(app.port)
-                 *          
-                 */
-            });
-        }));
-        return results;
-    }
     async gateRegistrationComplete({
         gateRegistration: gateRegistrationId
     }) {
@@ -590,6 +480,8 @@ module.exports = class Service {
         return artifactDoc.toJSON();
     }
 }
+
+let log = logger.sub('acme');
 async function getDnsName(vhost) {
     const log = logger.sub("getDnsName");
 
@@ -650,11 +542,13 @@ async function getOrCreateAcmeKey() {
                 owner: 'bizi.ly'
             }
         }, Readable.from('' + buf));
-        await file.save();
-        return { buf, doc: file };
+        logger.debug(file);
+        // await file.save();
+        return { buf, doc: await File.findById(file.id) };
     }
 }
 async function challengeCreateFn(authz, challenge, keyAuthorization) {
+    const log = logger.sub('acme:challengeCreateFn');
     if (challenge.type === 'http-01') {
 
         log.debug("challengeCreateFn()...", { authz, challenge, keyAuthorization });
@@ -752,6 +646,7 @@ async function challengeCreateFn(authz, challenge, keyAuthorization) {
 
 }
 async function challengeRemoveFn(authz, challenge, keyAuthorization) {
+    const log = logger.sub('acme:challengeRemoveFn');
     log.debug("challengeRemoveFn()...", { authz, challenge, keyAuthorization });
     if (challenge.type === 'http-01') {
         const route = "/acme-challenge/" + challenge.token;
@@ -834,7 +729,7 @@ async function runAcmeChallenge(domain) {
         const { DNS_MODE } = process.env;
         const order = await client.createOrder({
             identifiers: [
-                { type: DNS_MODE ? 'dns' : 'http', value: domain },
+                { type: 'dns', value: domain },
             ]
         });
         const authorizations = await client.getAuthorizations(order);
@@ -852,7 +747,7 @@ async function runAcmeChallenge(domain) {
                 const { challenges } = authz;
 
                 /* Just select any challenge */
-                const challenge = challenges.pop();
+                const challenge = challenges.find(c => c.type === 'dns-01');
                 const keyAuthorization = await client.getChallengeKeyAuthorization(challenge);
 
                 try {
