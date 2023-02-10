@@ -65,11 +65,11 @@ module.exports = class AkashCLI {
         log.debug("Deleting existing key by name:", this.account.name);
 
         process.env.DO_DELETE && await new Promise((resolve, reject) =>
-            exec(`yes | ./akash keys delete --keyring-backend ${this.keyRingBackend} ` + this.account.name,
+            exec(`yes | ` + this.commandWithEnv(`./akash keys delete --keyring-backend ${this.keyRingBackend} ` + this.account.name),
                 (err, stdout, stderr) => resolve({ err, stdout, stderr }))
         );
         return new Promise((resolve, reject) => {
-            exec(prefix + `./akash keys add --output json --keyring-backend ${this.keyRingBackend} ` + this.account.name + suffix, (err, stdout, stderr) => {
+            exec(prefix + this.commandWithEnv(`./akash keys add --output json --keyring-backend ${this.keyRingBackend} ` + this.account.name + suffix), (err, stdout, stderr) => {
                 if (err && !stderr.length) return reject(err);
                 log.debug({ stderr });
                 const out = JSON.parse(stderr);
@@ -177,7 +177,7 @@ module.exports = class AkashCLI {
     }
 
     async getBalance() {
-        return new Promise((resolve, reject) => exec(`./akash query bank balances --output json --node ${this.node} ${this.account.akash.address}`, (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec(this.commandWithEnv(`./akash query bank balances --output json --node ${this.node} ${this.account.akash.address}`), (err, stdout, stderr) => {
             if (err) return reject(err);
             resolve(JSON.parse(stdout));
         }));
@@ -227,21 +227,21 @@ module.exports = class AkashCLI {
         }))
     }
     getBids(deployment) {
-        return new Promise((resolve, reject) => exec(`./akash query market bid list --owner=${this.account.akash.address} --node ${this.node} --dseq ${deployment.deployment.body.messages[0].id.dseq} --state=open --output json`, (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec(this.commandWithEnv(`./akash query market bid list --owner=${this.account.akash.address} --node ${this.node} --dseq ${deployment.deployment.body.messages[0].id.dseq} --state=open --output json`), (err, stdout, stderr) => {
             if (err) return reject(err + '\nSTDERR:\n' + stderr);
             logger.debug({ stdout });
             resolve({ ...JSON.parse(stdout), deployment });
         }))
     }
     viewLogs({ provider, dseq }) {
-        return new Promise((resolve, reject) => exec(`./akash lease-logs --node ${this.node}  --dseq ${dseq}   --provider ${provider}   --from ${this.account.akash.name}`, (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec(this.commandWithEnv(`./akash lease-logs --node ${this.node}  --dseq ${dseq}   --provider ${provider}   --from ${this.account.akash.name}`), (err, stdout, stderr) => {
             if (err) return reject(err + '\nSTDERR:\n' + stderr);
             logger.debug({ stdout });
             resolve(stdout);
         }))
     }
     sendAkt(amount, to) {
-        return new Promise((resolve, reject) => exec(`./akash tx bank send ${this.account.akash.address} ${to} ${amount} --node ${this.node} --chain-id ${this.chainId}`, (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec(this.commandWithEnv(`./akash tx bank send ${this.account.akash.address} ${to} ${amount} --node ${this.node} --chain-id ${this.chainId}`), (err, stdout, stderr) => {
             if (err) return reject(err + '\nSTDERR:\n' + stderr);
             logger.debug({ stdout });
             resolve(JSON.parse(stdout));
@@ -251,28 +251,28 @@ module.exports = class AkashCLI {
         return bids.sort((a, b) => Number(a.bid.price.amount) - Number(b.bid.price.amount))[0];//.map(b => b.bid.price)
     }
     getProviderInfo({ provider }) {
-        return new Promise((resolve, reject) => exec(`./akash query provider get ${provider} --output json --node ${this.node} --chain-id ${this.chainId}`, (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec(this.commandWithEnv(`./akash query provider get ${provider} --output json --node ${this.node} --chain-id ${this.chainId}`), (err, stdout, stderr) => {
             if (err) return reject(err + '\nSTDERR:\n' + stderr);
             logger.debug({ stdout });
             resolve(JSON.parse(stdout));
         }))
     }
     sendManifest({ provider, dseq, filename }) {
-        return new Promise((resolve, reject) => exec(`yes | ./akash send-manifest ${filename}  --node ${this.node} --output json --dseq ${dseq} --provider ${provider} --from ${this.account.name}`, async (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec(`yes | ` + this.commandWithEnv(`./akash send-manifest ${filename}  --node ${this.node} --output json --dseq ${dseq} --provider ${provider} --from ${this.account.name}`), async (err, stdout, stderr) => {
             if (err) return reject(err + '\nSTDERR:\n' + stderr);
             logger.debug({ stdout });
             resolve(JSON.parse(stdout));
         }))
     }
     checkLease({ dseq }) {
-        return new Promise((resolve, reject) => exec(`./akash query market lease list --output json --owner ${this.account.akash.address} --node ${this.node} --dseq ${dseq}`, async (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec(this.commandWithEnv(`./akash query market lease list --output json --owner ${this.account.akash.address} --node ${this.node} --dseq ${dseq}`), async (err, stdout, stderr) => {
             if (err) return reject(err + '\nSTDERR:\n' + stderr);
             logger.debug({ stdout });
             resolve(JSON.parse(stdout));
         }))
     }
     deploymentStatus({ dseq, provider }) {
-        return new Promise((resolve, reject) => exec(`./akash lease-status --from ${this.account.name} --provider ${provider} --node ${this.node} --dseq ${dseq}`, async (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec(this.commandWithEnv(`./akash lease-status --from ${this.account.name} --provider ${provider} --node ${this.node} --dseq ${dseq}`), async (err, stdout, stderr) => {
             logger.sub('deployment-status-😒').debug({ err, stdout, stderr });
             if (err) return reject(err + '\nSTDERR:\n' + stderr);
             logger.debug({ stdout });
@@ -315,7 +315,7 @@ module.exports = class AkashCLI {
         }))
     }
     getDenominations() {
-        return new Promise((resolve, reject) => exec(`./akash query bank denom-metadata --output json  --node ${this.node} `, (err, stdout, stderr) => {
+        return new Promise((resolve, reject) => exec(this.commandWithEnv(`./akash query bank denom-metadata --output json  --node ${this.node} `), (err, stdout, stderr) => {
             if (err) return reject(err);
             resolve(JSON.parse(stdout));
         }));
