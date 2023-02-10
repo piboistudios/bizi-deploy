@@ -171,7 +171,11 @@ module.exports = class AkashCLI {
         await this.refreshPriceData();
         log.debug("All set");
         global.cli = this;
+        if(!process.env.DONT_GEN_CERT) {
+            await this.genCert()
+        }
     }
+
     async getBalance() {
         return new Promise((resolve, reject) => exec(`./akash query bank balances --output json --node ${this.node} ${this.account.akash.address}`, (err, stdout, stderr) => {
             if (err) return reject(err);
