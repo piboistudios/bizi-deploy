@@ -34,22 +34,22 @@ module.exports = class AkashCLI {
 
     }
     get node() {
-        return this.nodes[0];
+        return this.nodes && this.nodes[0];
     }
     get baseEnv() {
         return {
             AKASH_NET: process.env.AKASH_NET,
             AKASH_VERSION: this.version,
-            AKASH_CHAIN_ID: this.chainId.trim(),
+            AKASH_CHAIN_ID: this.chainId && this.chainId.trim(),
             AKASH_NODE: this.node,
-            AKASH_KEY_NAME: this.account.name,
+            AKASH_KEY_NAME: this?.account?.name,
             AKASH_KEYRING_BACKEND: this.keyRingBackend,
-            AKASH_ACCOUNT_ADDRESS: this.account.akash.address,
+            AKASH_ACCOUNT_ADDRESS: this?.account?.akash?.address,
             ...this.additionalEnv
         }
     }
     commandWithEnv(cmd) {
-        const r = Object.entries(this.baseEnv).map(e => `${e[0]}=${e[1]}`).join(' ') + ' ' + cmd;
+        const r = Object.entries(this.baseEnv).filter(([k,v]) => v !== undefined).map(e => `${e[0]}=${e[1]}`).join(' ') + ' ' + cmd;
         logger.debug("command with env:", r);
         return r;
     }
