@@ -385,13 +385,15 @@ module.exports = class DeploymentEngine {
                 }
                 const result = {
                     ready: true,
-                    params: {
-                        'dest.host': downstream.host,
-                        'dest.port': downstream.externalPort,
+                    params: [{
+
                         'src.host': vhost.id,
                         'src.port': getUpstreamPort(p, downstream.port),
                         client: zone.client
-                    }
+                    }, {
+                        'dest.host': downstream.host,
+                        'dest.port': downstream.externalPort,
+                    }]
                 };
                 log.debug("result:", result);
                 return result;
@@ -404,7 +406,7 @@ module.exports = class DeploymentEngine {
         return (await Promise.all(gateRegistrationsToCreate.filter(isReady).map(async r => {
             log.debug("working...", r);
             const doc = await GateRegistration.findOneAndUpdate(
-                ...[r.params, {}, {
+                ...[...r.params, {
                     upsert: true,
                     new: true
                 }]
