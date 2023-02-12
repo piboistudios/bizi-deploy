@@ -128,10 +128,6 @@ module.exports = class Service {
         const boilerplate = [
             {
                 name: 'core',
-            },
-            {
-                name: 'bizi-kiwiconfig',
-
             }
         ]
         await biziDeployment.save();
