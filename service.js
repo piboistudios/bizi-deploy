@@ -561,87 +561,46 @@ async function challengeCreateFn(authz, challenge, keyAuthorization) {
         await acmeChallenge.save();
 
     } else {
-        const { stub, zone } = parseName(authz.identifier.value);
-        const zoneRes = await axios.get(`https://graph.bizi.ly/dns.zones?filter=(dnsName,:eq,\`${zone}\`)`);
-        if (zoneRes.status !== 200) {
-            const err = mkErr("Unable to retrieve zone", zoneRes);
-            logger.fatal(err);
-            throw err;
-        }
-
-        const zoneId = zoneRes.data?.data?.[0]?.id;
-        if (!zoneId) {
-            logger.fatal("Unable to retrieve zone id:", zoneRes.data);
-            throw new Error("no_zone_id")
-        }
-        const dnsRecord = ['_acme-challenge', stub].filter(Boolean).join('.');
-        const recordValue = keyAuthorization;
-
-        log.debug(`Creating TXT record for ${authz.identifier.value}: ${dnsRecord}`);
-
-        /* Replace this */
-        log.debug(`Would create TXT record "${dnsRecord}" with value "${recordValue}"`);
-        // await dnsProvider.createRecord(dnsRecord, 'TXT', recordValue);
-        const recordsetCreateRes = await axios.post("https://graph.bizi.ly/dns.recordsets", {
-            "data": [
-                {
-                    "type": "dns.recordsets",
-                    "attributes": {
-                        "stub": dnsRecord,
-                        "resourceType": "TXT",
-                        "ttl": 1,
-                        "records": [
-                            {
-                                "value": recordValue
-                            }
-                        ],
-                        "routingPolicy": 0
-
-                    },
-                    "relationships": {
-                        "zone": {
-                            "data": {
-                                "id": zoneId,
-                                "type": "dns.zones"
-                            }
-                        }
-                    }
-                },
-                {
-                    "type": "dns.recordsets",
-                    "attributes": {
-                        "stub": dnsRecord,
-                        "resourceType": "NS",
-                        "ttl": 1,
-                        "records": [
-                            {
-                                "value": "ns-a1.bizi.ly"
-                            },
-                            {
-                                "value": "ns-a2.bizi.ly"
-                            }
-                        ],
-                        "routingPolicy": 0
-
-                    },
-                    "relationships": {
-                        "zone": {
-                            "data": {
-                                "id": zoneId,
-                                "type": "dns.zones"
-                            }
-                        }
-                    }
-                }
-            ]
-
+        let { stub, zone } = parseName(authz.identifier.value);
+        const zoneDocs = await DnsZone.find({
+            dnsName: new RegExp(`((${stub}\.)|^)` + zone + '$', 'i')
         });
-        if (recordsetCreateRes.status !== 201) {
-            const err = mkErr("Unable to create DNS Recordset:", recordsetCreateRes);
-            logger.fatal(err);
-            throw err;
-        }
-        await new Promise((resolve, reject) => setTimeout(() => resolve(), 1000 * 60 * 1));
+        await Promise.all(zoneDocs.map(async zoneDoc => {
+
+
+            const zoneId = zoneDoc.id
+
+            if (!zoneId) {
+                logger.fatal("Unable to retrieve zone id:", zoneRes.data);
+                throw new Error("no_zone_id")
+            }
+            const searchStub = zoneDoc.dnsName.indexOf(stub) === 0 ? undefined : stub;
+            const dnsRecord = ['_acme-challenge', searchStub].filter(Boolean).join('.');
+            const recordValue = keyAuthorization;
+
+            log.debug(`Creating TXT record for ${authz.identifier.value}: ${dnsRecord}`);
+
+            /* Replace this */
+            log.debug(`Would create TXT record "${dnsRecord}" with value "${recordValue}"`);
+            // await dnsProvider.createRecord(dnsRecord, 'TXT', recordValue);
+            const createdRecordset = await DnsRecordset.findOneAndUpdate({
+                "stub": dnsRecord,
+                "resourceType": "TXT",
+                zone: zoneId
+            }, {
+                "ttl": 1,
+                "records": [
+                    {
+                        "value": recordValue
+                    }
+                ],
+                "routingPolicy": 0
+            }, {
+                upsert: true,
+                new: true
+            })
+        }))
+        await new Promise((resolve, reject) => setTimeout(() => resolve(), 1000 * 30 * 1));
     }
 
 }
@@ -659,44 +618,35 @@ async function challengeRemoveFn(authz, challenge, keyAuthorization) {
         });
     }
     else {
-        const { stub, zone } = parseName(authz.identifier.value);
+        let { stub, zone } = parseName(authz.identifier.value);
+        const zoneDocs = await DnsZone.find({
+            dnsName: new RegExp(`((${stub}\.)|^)` + zone + '$', 'i')
+        });
+        await Promise.all(zoneDocs.map(async zoneDoc => {
 
-        const zoneRes = await axios.get(`https://graph.bizi.ly/dns.zones?filter=(dnsName,:eq,\`${zone}\`)`);
 
-        if (zoneRes.status !== 200) {
-            const err = mkErr("Unable to retrieve zone", zoneRes);
-            logger.fatal(err);
-            throw err;
-        }
+            const zoneId = zoneDoc.id
 
-        const zoneId = zoneRes.data?.data?.[0]?.id;
-        if (!zoneId) {
-            logger.fatal("Unable to retrieve zone id:", zoneRes.data);
-            throw new Error("no_zone_id")
-        }
-        const dnsRecord = ['_acme-challenge', stub].filter(Boolean).join('.');
+            if (!zoneId) {
+                logger.fatal("Unable to retrieve zone id:", zoneRes.data);
+                throw new Error("no_zone_id")
+            }
+            const searchStub = zoneDoc.dnsName.indexOf(stub) === 0 ? undefined : stub;
+            const dnsRecord = ['_acme-challenge', searchStub].filter(Boolean).join('.');
 
-        const recordValue = keyAuthorization;
+            const recordValue = keyAuthorization;
 
-        const recordsetRes = await axios.get(`https://graph.bizi.ly/dns.recordsets?filter=(:and,(zone,:eq,\`${zoneId}\`),(stub,:eq,\`${dnsRecord}\`))`);
-        if (!recordsetRes.status === 200) {
-            const err = mkErr("Unable to retrieve recordset", recordsetRes);
-            logger.fatal(err);
-            throw err;
-        }
+            log.debug(`Removing TXT record for ${authz.identifier.value}: ${dnsRecord}`);
 
-        const recordsetIds = recordsetRes.data?.data?.map(d => d.id);
-        log.debug(`Removing TXT record for ${authz.identifier.value}: ${dnsRecord}`);
-
-        /* Replace this */
-        log.debug(`Would remove TXT record "${dnsRecord}" with value "${recordValue}"`);
-        const recordsetDeleteRes = await Promise.all(recordsetIds.map(recordsetId => axios.delete("https://graph.bizi.ly/dns.recordsets/" + recordsetId)));
-        if (recordsetDeleteRes.every(r => r.status !== 204)) {
-            const err = mkErr("Unable to delete DNS Recordset:", recordsetDeleteRes);
-            logger.fatal(err);
-            throw err;
-        }
-        logger.info("Successfully removed record");
+            /* Replace this */
+            log.debug(`Would remove TXT record "${dnsRecord}" with value "${recordValue}"`);
+           
+            await DnsRecordset.deleteMany({
+                stub: dnsRecord,
+                zone: zoneId
+            })
+            logger.info("Successfully removed record");
+        }))
         // await dnsProvider.removeRecord(dnsRecord, 'TXT');
     }
 }
