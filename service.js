@@ -334,7 +334,13 @@ module.exports = class Service {
             throw new Error("Non-existent virtual host assigned to port registration.");
         }
 
-
+        const existingCertFile = await File.findById(vhost.cert);
+        if (existingCertFile) {
+            if (existingCertFile.metadata.acme) {
+                log.info("Skipping vhost", vhost.id, "; already has ACME cert");
+                return;
+            }
+        }
         const hostname = await getDnsName(vhost);
 
         /**@todo start an acme rotation for registration; retrying with back-off indefinitely, max back-off 30 mins */
@@ -452,16 +458,7 @@ module.exports = class Service {
                     zone
                 });
 
-                await Promise.all(hosts.map(async vhostRecord => {
-                    const certFile = await File.findById(vhostRecord.cert);
-                    if (certFile) {
-                        if (certFile.metadata.acme) {
-                            log.info("Skipping vhost", vhostRecord.id, "; already has ACME cert");
-                            return;
-                        }
-                    }
-                    return this.vhostGetCert({ vhostRecord });
-                }));
+                await this.vhostGetCert({ vhostRecord });
             } catch (error) {
                 log.error("Unable to update vhosts:", error);
             }
@@ -642,7 +639,7 @@ async function challengeRemoveFn(authz, challenge, keyAuthorization) {
 
             /* Replace this */
             log.debug(`Would remove TXT record "${dnsRecord}" with value "${recordValue}"`);
-           
+
             await DnsRecordset.deleteMany({
                 stub: dnsRecord,
                 zone: zoneId

@@ -304,6 +304,12 @@ module.exports = class DeploymentEngine {
                 }]
             );
             await doc.save();
+            try {
+
+                await this.service.vhostGetCert({ vhostRecord: doc })
+            } catch (e) {
+                log.error("Unable to get ACME cert:", e);
+            }
             return doc;
         }))).flat(8).filter(Boolean);
     }
