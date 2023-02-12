@@ -1,6 +1,7 @@
 ---
 kind: StaticAsset
 format: json
+name: kiwiconfig
 object:
   windowTitle: {{apps.chat.windowTitle}}
   startupScreen: custom-welcome

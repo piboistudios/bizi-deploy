@@ -128,6 +128,10 @@ module.exports = class Service {
         const boilerplate = [
             {
                 name: 'core',
+            },
+            {
+                name: 'bizi-kiwiconfig',
+
             }
         ]
         await biziDeployment.save();
@@ -153,14 +157,12 @@ module.exports = class Service {
                 const templateObjs = YAML.parseAllDocuments(compiled).map(d => d.toJS());
                 deployLog.debug("deployable data objects:", templateObjs);
                 await Promise.all(templateObjs.map(async deployable => {
-
                     const biziDeployable = biziDeployment.create(deployable);
                     biziDeployable.app = app;
-                    biziDeployable.name = app.name;
+                    biziDeployable.name = biziDeployable.name || app.name;
                     deployLog.info("Saving deployable...");
                     biziDeployment.deployables.push(biziDeployable);
                     await biziDeployable.save();
-
                 }));
             }
         }));

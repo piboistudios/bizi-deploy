@@ -310,6 +310,7 @@ module.exports = class DeploymentEngine {
     async getPortRegistrations({ deployables, vhosts, recordsets, zones }) {
         const baseLog = logger.sub('getPortRegistrations');
         return (await Promise.all(deployables.flatMap(async d => {
+            if (d.data.kind === 'StaticAsset') return [];
             d = await Deployable.findById(d.id);
             const deployable = d;
             const log = baseLog.sub(d.name || d.data.name);
