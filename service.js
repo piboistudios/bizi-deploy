@@ -1,3 +1,4 @@
+const moment = require('moment');
 const fs = require('fs');
 const parseDomain = require('parse-domains');
 const DnsVerifier = require('./dns.verification');
@@ -329,15 +330,34 @@ module.exports = class Service {
         if (!vhost) {
             throw new Error("Non-existent virtual host assigned to port registration.");
         }
+        const hostname = await getDnsName(vhost);
 
         const existingCertFile = await File.findById(vhost.cert);
+        const directory = process.env.ACME_DIRECTORY || 'letsencrypt';
+        const environment = process.env.ACME_ENVIRONMENT || 'staging';
         if (existingCertFile) {
-            if (existingCertFile.metadata.acme) {
-                log.info("Skipping vhost", vhost.id, "; already has ACME cert");
-                return;
+            if (existingCertFile?.metadata?.acme) {
+                const { acme } = existingCertFile.metadata;
+                if (acme.environment == environment && acme.directory == directory) {
+                    log.info("Skipping vhost", vhost.id, "; already has ACME cert");
+                    return;
+                }
             }
         }
-        const hostname = await getDnsName(vhost);
+        const previouslySavedKeyPair = await File.find({
+            "metadata.acme.directory": directory,
+            "metadata.acme.environment": environment,
+            commonName: hostname
+        })
+        if (previouslySavedKeyPair.length === 2) {
+            log.info("Using existing ACME keypair");
+            log.debug("Existing pair:", previouslySavedKeyPair);
+            const cert = previouslySavedKeyPair.find(f => f?.metadata?.cert);
+            const key = previouslySavedKeyPair.find(f => f?.metadata?.key);
+            vhost.key = key.id;
+            vhost.cert = cert.id;
+            return await vhost.save();
+        }
 
         /**@todo start an acme rotation for registration; retrying with back-off indefinitely, max back-off 30 mins */
         const pems = await async.retry({
@@ -345,13 +365,29 @@ module.exports = class Service {
             interval: count => count * 1000 * 60
         }, async.asyncify(() => runAcmeChallenge(hostname)));
         log.debug("Got ACME PEMS:", pems);
+        const expires = moment().add(90, 'days').toDate();
         const keyFile = await File.write({
-            filename: hostname + ".key.pem"
+            filename: hostname + ".key.pem",
+            metadata: {
+                acme: {
+                    directory,
+                    environment
+                },
+                commonName: hostname,
+                expires,
+                key: true
+            }
         }, Readable.from(pems.key));
         const certFile = await File.write({
             filename: hostname + '.cert.pem',
             metadata: {
-                acme: true
+                acme: {
+                    directory: process.env.ACME_DIRECTORY || 'letsencrypt',
+                    environment: process.env.ACME_ENVIRONMENT || 'staging'
+                },
+                commonName: hostname,
+                expires,
+                cert: true,
             }
         }, Readable.from(pems.cert));
         vhost.cert = certFile.id;
@@ -521,9 +557,14 @@ function stream2buffer(stream) {
     });
 }
 async function getOrCreateAcmeKey() {
+    const directory = process.env.ACME_DIRECTORY || 'letsencrypt';
+    const environment = process.env.ACME_ENVIRONMENT || 'staging';
+
     const existingAcmeKey = await File.findOne({
         filename: 'acme.private',
-        'metadata.owner': 'bizi.ly'
+        'metadata.owner': 'bizi.ly',
+        'metadata.acme.directory': directory,
+        'metadata.acme.environment': environment
     })
     if (existingAcmeKey) {
         const stream = existingAcmeKey.read();
@@ -531,15 +572,22 @@ async function getOrCreateAcmeKey() {
         return { buf, doc: existingAcmeKey };
     } else {
         const buf = await acme.crypto.createPrivateKey();
-        const file = await File.write({
+        const file = await new Promise((resolve, reject) => File.write({
             filename: 'acme.private',
             metadata: {
-                owner: 'bizi.ly'
+                owner: 'bizi.ly',
+                acme: {
+                    directory,
+                    environment
+                }
             }
-        }, Readable.from('' + buf));
+        }, Readable.from('' + buf), (err, file) => {
+            if (err) return reject(err);
+            resolve(file);
+        }));
         logger.debug(file);
-        // await file.save();
-        return { buf, doc: await File.findById(file.id) };
+        await file.save();
+        return { buf, doc: file };
     }
 }
 async function challengeCreateFn(authz, challenge, keyAuthorization) {

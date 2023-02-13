@@ -29,15 +29,15 @@ object:
   - name: Elite
     url: static/themes/elite
   startupOptions:
-    server: {{internal.apps.biziIrc.hostname.domain}}
+    server: {{internal.apps.biziIrc.hostname.hostname}}
     port: 6698
     toggablePassword: false
-    channel: "{{apps.chat.defaultChannel}}"
-    greetingText: {{apps.chat.greetingText}}
-    nick: {{apps.chat.defaultNick}}
+    channel: "{{{apps.chat.defaultChannel}}}"
+    greetingText: "{{{apps.chat.greetingText}}}"
+    nick: "{{apps.chat.defaultNick}}"
     direct: true
     tls: true
-  buffers:
+  buffers:z
     who_loop: false
     nicklist_avatars: true
     extra_formatting: false
@@ -45,8 +45,8 @@ object:
     key: ''
   plugins:
   - name: encryption-mac
-    url: https://ipfs.io/ipns/kiwiiirc-plugins--encryption-mac.bizi.ly/plugin.js
+    url: https://kiwiiirc--plugins----encryption--mac-bizi-systems.ipns.cf-ipfs.com/dist/plugin.js
     options:
-      basePath: "https://ipfs.io/ipns/kiwiiirc-plugins--encryption-mac.bizi.ly/"
+      basePath: "https://kiwiiirc--plugins----encryption--mac-bizi-systems.ipns.cf-ipfs.com/dist/"
   - name: smart-chat-history
-    url: https://ipfs.io/ipns/kiwiiirc-plugins--smart-chat-history.bizi.ly/plugin.js
+    url: https://kiwiiirc--plugins----smart--chat--history-bizi-systems.ipns.cf-ipfs.com/dist/plugin.js

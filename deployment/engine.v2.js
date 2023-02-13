@@ -180,7 +180,11 @@ module.exports = class DeploymentEngine {
     async upsertDnsZones({ zonesToCreate }) {
         const log = logger.sub('upsertDnsZones');
         log.debug("zones to create:", zonesToCreate);
-        return (await Promise.all(zonesToCreate.filter(isReady).map(async z => {
+        const distinctZones = [];
+        zonesToCreate.forEach(r => {
+            if(!distinctZones.find(z => z.params.domain === r.params.domain)) distinctZones.push(r);
+        })
+        return (await Promise.all(distinctZones.filter(isReady).map(async z => {
             log.debug("Bootstrapping:", z.params);
             const { ids } = await this.service.dnsZoneBootstrap(z.params);
             return DnsZone.findById(ids.zone);
@@ -199,7 +203,7 @@ module.exports = class DeploymentEngine {
                 log.debug("domain:", parsedDomain);
                 const zone = zones.find(z => z.dnsName === parsedDomain.domain);
                 log.debug("Zone:", zone);
-                const manager = new RecordsetManager(deployable, zone, parsedDomain);
+                const manager = new RecordsetManager(deployable, zone, parsedDomain, this);
                 if (zone) {
                     switch (d.data.kind) {
                         case 'FrontEnd':
@@ -446,7 +450,7 @@ module.exports = class DeploymentEngine {
         const uuid = randomUUID();
         const tmp = os.tmpdir();
         const tmpDir = path.join(...[tmp, dir].filter(Boolean))
-        if (dir && fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
+        if (dir && !fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
         const tmpPath = path.join(...[tmpDir, `${uuid}.${ext}`].filter(Boolean));
         fs.writeFileSync(tmpPath, content);
         return tmpPath;

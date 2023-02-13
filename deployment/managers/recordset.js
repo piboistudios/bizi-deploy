@@ -44,7 +44,7 @@ module.exports = class RecordsetManager {
             if (!doc) {
                 return {
                     error: "No build artifact found for: " + artifact.name,
-                    deployable: deployable
+                    deployable: this.deployable
                 }
             }
             cid = doc.artifact.cid;
