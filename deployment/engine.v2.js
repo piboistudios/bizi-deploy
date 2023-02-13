@@ -182,7 +182,7 @@ module.exports = class DeploymentEngine {
         log.debug("zones to create:", zonesToCreate);
         const distinctZones = [];
         zonesToCreate.forEach(r => {
-            if(!distinctZones.find(z => z.params.domain === r.params.domain)) distinctZones.push(r);
+            if (!distinctZones.find(z => z.params.domain === r.params.domain)) distinctZones.push(r);
         })
         return (await Promise.all(distinctZones.filter(isReady).map(async z => {
             log.debug("Bootstrapping:", z.params);
@@ -246,7 +246,7 @@ module.exports = class DeploymentEngine {
         return (await Promise.all(recordsetsToCreate.filter(isReady).map(async r => {
             log.debug("working...", r);
             const [filter, update] = r.params;
-            if (!filter.stub) delete filter.stub;
+            if (!filter.stub) filter.stub = { $exists: false };
             const doc = await DnsRecordset.findOneAndUpdate(
                 ...[...r.params, {
                     upsert: true,
@@ -375,13 +375,14 @@ module.exports = class DeploymentEngine {
                 }
                 const vhost = vhosts.find(v => {
                     const stub = v.stub || '';
+                    const vhostLookupLog = log.sub([v.stub, v.zone.dnsName].filter(Boolean).join(':') + '-compare:' + parsedDomain.hostname.split('.').join(':'))
                     const ret1 = stub === parsedDomain.subdomain;
-                    log.debug("checking if", stub, "eq", parsedDomain.subdomain, `(${ret1})`);
+                    vhostLookupLog.debug("checking if", stub, "eq", parsedDomain.subdomain, `(${ret1})`);
                     const ret2 = v.zone._id.toString() == zone._id.toString();
                     const ret2Strict = v.zone._id.toString() === zone._id.toString();
-                    log.debug("and", v.zone._id, "eq", zone._id, `(${ret2}; strict: ${ret2Strict})`);
+                    vhostLookupLog.debug("and", v.zone._id, "eq", zone._id, `(${ret2}; strict: ${ret2Strict})`);
                     const ret = ret1 && ret2;
-                    log.debug('result:', ret);
+                    vhostLookupLog.debug('result:', ret);
                     return ret;
                 })
                 ctx.vhost = vhost;
@@ -517,6 +518,16 @@ module.exports = class DeploymentEngine {
     }) {
         const log = logger.sub('deploymentStatusUpdate');
         log.info("begin..");
+        const backendDeployables = deployment.deployables.filter(
+            d => d.data.kind === 'BackEnd'
+        );
+        const portsExpected = backendDeployables.reduce((expected, deployable) => {
+            if (deployable?.app?.ports) {
+                expected += deployable.app.ports.length
+            }
+            return expected;
+        }, 0);
+        log.debug("expecting", portsExpected, "ports...");
         const client = deployment.client;
         // const deployment = await AkashDeployment.findOne({
         //     client, id: deploymentId
@@ -557,7 +568,13 @@ module.exports = class DeploymentEngine {
                     log.debug("BUT THE DEPLOYABLE SAVED? ITS", deployable);
                     return true;
                 }));
-                return results.every(Boolean);
+                const forwardedPorts = Object.values(status.forwarded_ports).flat().length;
+                log.debug("forwarded ports:", forwardedPorts);
+                log.debug("ports expected:", portsExpected);
+                return results.every(Boolean)
+                    &&
+                    forwardedPorts === portsExpected
+                // every downstream deployable should have a forwarded port..
             } catch (e) {
                 log.error("status update failure:", e);
                 return false;
